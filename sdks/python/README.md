@@ -115,13 +115,61 @@ The example will:
 - Transcribe audio in real-time using Deepgram
 - Print transcriptions to the console
 
+## 🔘 Button Control
+
+The Omi SDK supports button press detection for controlling recording and other functions:
+
+### Button States
+The Omi device button supports the following states:
+- **State 3**: Long press started (button held down)
+- **State 5**: Long press released
+- Toggle recording: First long press starts, second stops
+
+### Button Recording Example
+```python
+from omi import ButtonHandler, listen_to_omi_with_button
+from omi.feedback import RecordingFeedback
+
+# Create button handler with recording callbacks
+button_handler = ButtonHandler(
+    on_recording_start=lambda: print("Recording started"),
+    on_recording_stop=lambda: print("Recording stopped")
+)
+
+# Connect with button support
+await listen_to_omi_with_button(
+    mac_address=OMI_MAC,
+    audio_char_uuid=AUDIO_UUID,
+    audio_handler=handle_audio,
+    button_handler=button_handler
+)
+```
+
+### Audio Feedback (Optional)
+```bash
+# Install text-to-speech support
+pip install "omi-sdk[feedback]"
+```
+
+See `examples/button_recording.py` for a complete example with audio feedback.
+
 ## 📚 API Reference
 
 ### Core Functions
 - `omi.print_devices()` - Scan for Bluetooth devices
 - `omi.listen_to_omi(mac, uuid, handler)` - Connect to Omi device
+- `omi.listen_to_omi_with_button(mac, uuid, handler, button_handler)` - Connect with button support
 - `omi.OmiOpusDecoder()` - Decode Opus audio to PCM
 - `omi.transcribe(queue, api_key)` - Real-time transcription
+
+### Button Classes
+- `omi.ButtonHandler` - Handle button events and recording state
+- `omi.ButtonState` - Enum of button states
+- `omi.RecordingState` - Enum of recording states
+
+### Feedback Classes
+- `omi.AudioFeedback` - Text-to-speech feedback system
+- `omi.RecordingFeedback` - Recording-specific audio feedback
 
 ### Command Line Tools
 - `omi-scan` - Scan for nearby Bluetooth devices
