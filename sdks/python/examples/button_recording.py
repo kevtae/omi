@@ -24,7 +24,7 @@ from omi.bluetooth import listen_to_omi_with_button
 from omi.button import ButtonHandler, ButtonState
 from omi.decoder import OmiOpusDecoder
 from omi.transcribe import transcribe
-from omi.feedback import RecordingFeedback, AudioFeedback
+from omi.feedback import RecordingFeedback
 
 
 # Configuration - Replace with your device's MAC address
@@ -50,8 +50,7 @@ class RecordingSession:
         self.audio_bytes_received = 0
         
         # Initialize feedback system
-        self.audio_feedback = AudioFeedback(enabled=True)
-        self.recording_feedback = RecordingFeedback(self.audio_feedback)
+        self.recording_feedback = RecordingFeedback()
         
         # Initialize button handler with callbacks
         self.button_handler = ButtonHandler(
@@ -169,9 +168,6 @@ async def main() -> None:
         print("\n\n👋 Recording session terminated by user")
     except Exception as e:
         print(f"\n❌ Error: {e}")
-    finally:
-        # Clean up audio feedback system
-        session.audio_feedback.stop()
 
 
 if __name__ == "__main__":

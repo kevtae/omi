@@ -88,9 +88,60 @@ async def listen_to_omi_with_button(
             except Exception as e:
                 print(f"❌ Haptic feedback error: {e}")
         
+        # Enhanced haptic feedback function with start/stop patterns
+        async def play_enhanced_haptic(pattern_type: str) -> None:
+            """
+            Play enhanced haptic patterns for recording start/stop feedback.
+            
+            Args:
+                pattern_type: "start" for recording start, "stop" for recording stop
+            """
+            try:
+                services = client.services
+                service_list = list(services)
+                
+                # Find speaker service
+                speaker_service = None
+                for service in service_list:
+                    if service.uuid.lower() == SPEAKER_SERVICE_UUID.lower():
+                        speaker_service = service
+                        break
+                
+                if speaker_service:
+                    # Find speaker characteristic
+                    speaker_char = None
+                    for char in speaker_service.characteristics:
+                        if char.uuid.lower() == SPEAKER_CHARACTERISTIC_UUID.lower():
+                            speaker_char = char
+                            break
+                    
+                    if speaker_char:
+                        if pattern_type == "start":
+                            # Recording START: Quick double pulse (energetic, "go!")
+                            await client.write_gatt_char(speaker_char, bytes([1]))  # 20ms pulse
+                            await asyncio.sleep(0.1)
+                            await client.write_gatt_char(speaker_char, bytes([2]))  # 50ms pulse
+                            print("🔊 Recording START haptic: double pulse")
+                        elif pattern_type == "stop":
+                            # Recording STOP: Single long pulse (definitive, "done!")
+                            await client.write_gatt_char(speaker_char, bytes([3]))  # 500ms pulse
+                            print("🔊 Recording STOP haptic: long pulse")
+                        else:
+                            # Unknown pattern, use basic haptic
+                            await client.write_gatt_char(speaker_char, bytes([1]))  # 20ms pulse
+                            print(f"🔊 Basic haptic for unknown pattern: {pattern_type}")
+                    else:
+                        print("⚠️  Speaker characteristic not found for enhanced haptic")
+                else:
+                    print("⚠️  Speaker service not found for enhanced haptic")
+            except Exception as e:
+                print(f"❌ Enhanced haptic feedback error: {e}")
+
         # Start button notifications if handler provided
         if button_handler:
-            # Set up haptic callback in button handler
+            # Set up enhanced haptic callback for start/stop patterns
+            button_handler._enhanced_haptic_callback = lambda pattern: asyncio.create_task(play_enhanced_haptic(pattern))
+            # Keep basic haptic callback for fallback situations
             button_handler.haptic_callback = lambda level: asyncio.create_task(play_haptic(level))
             # Check if button service is available
             services = client.services
