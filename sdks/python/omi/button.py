@@ -67,7 +67,8 @@ class ButtonHandler:
             on_recording_start: Callback when recording starts
             on_recording_stop: Callback when recording stops
             on_button_event: Callback for raw button events
-            haptic_callback: Callback to trigger haptic feedback (level 1-3)
+            haptic_callback: Callback to trigger basic haptic feedback (level 1-3)
+                           Note: Enhanced start/stop haptic patterns are handled automatically
         """
         self.recording_state = RecordingState.IDLE
         self.on_recording_start = on_recording_start
@@ -93,19 +94,15 @@ class ButtonHandler:
             The parsed ButtonState or None if parsing fails
         """
         if len(data) < 4:
-            print(f"Button data too short: {len(data)} bytes")
             return None
         
         # Button state is in first 4 bytes, little endian (no reversal needed)
         # The data format appears to be: [state, 0, 0, 0, ...additional bytes...]
         state_value = struct.unpack('<I', data[:4])[0]
-        print(f"Parsed button state value: {state_value}")
         
         try:
             button_state = ButtonState(state_value)
         except ValueError:
-            # Unknown state value - let's see all possible values
-            print(f"Unknown button state: {state_value} (raw data: {data.hex()})")
             return None
         
         # Check for rapid duplicate notifications within a short time window
@@ -116,10 +113,7 @@ class ButtonHandler:
         if hasattr(self, '_last_button_state') and hasattr(self, '_last_button_time'):
             time_diff = current_time - self._last_button_time
             if self._last_button_state == button_state and time_diff < 0.1:  # 100ms window
-                print(f"⚠️  Rapid duplicate button state ignored: {button_state} (within {time_diff:.3f}s)")
                 return button_state
-            elif self._last_button_state == button_state:
-                print(f"✅ Same state but after {time_diff:.2f}s - processing as new press")
         
         self._last_button_state = button_state
         self._last_button_time = current_time
@@ -131,8 +125,6 @@ class ButtonHandler:
         # TODO: REMOVE AFTER FIRMWARE UPDATE - FIRMWARE BUG WORKAROUND: Handle both START and RELEASE events intelligently
         if button_state == ButtonState.LONG_PRESS_START:
             self._last_start_time = current_time  # TODO: REMOVE AFTER FIRMWARE UPDATE
-            print(f"✅ Long press START detected! Toggling recording - Current state: {self.recording_state}")
-            # Note: haptic feedback is now handled in _toggle_recording() with enhanced patterns
             self._toggle_recording()
             
         elif button_state == ButtonState.LONG_PRESS_RELEASE:
@@ -140,17 +132,11 @@ class ButtonHandler:
             
             # TODO: REMOVE AFTER FIRMWARE UPDATE - FALLBACK LOGIC: If we got RELEASE without recent START, START was likely missed
             if self._fallback_enabled and self._should_trigger_fallback_toggle():
-                print(f"⚠️ FALLBACK: RELEASE without recent START - likely missed START event due to firmware bug")
-                print(f"🔄 Triggering fallback toggle - Current state: {self.recording_state}")
-                
-                # Note: haptic feedback is now handled in _toggle_recording() with enhanced patterns
                 # Provide additional haptic for fallback indication
                 if self.haptic_callback:
                     haptic_level = 2  # 50ms vibration - additional feedback to indicate fallback was used
                     self.haptic_callback(haptic_level)
                 self._toggle_recording()
-            else:
-                print(f"🔵 Long press released - toggle already happened on START")
         
         return button_state
     
@@ -175,7 +161,6 @@ class ButtonHandler:
             # If RELEASE is more than 3 seconds after last START, likely a missed START
             time_since_last_start = self._last_release_time - self._last_start_time
             if time_since_last_start > 3.0:
-                print(f"🕐 Time since last START: {time_since_last_start:.1f}s (>3s suggests missed START)")
                 return True
         
         return False
@@ -185,7 +170,6 @@ class ButtonHandler:
         if self.recording_state == RecordingState.IDLE:
             self.recording_state = RecordingState.RECORDING
             self._toggle_count += 1
-            print(f"🔴 Recording started (toggle #{self._toggle_count})")
             
             # Enhanced haptic for recording start
             if self._enhanced_haptic_callback:
@@ -197,7 +181,6 @@ class ButtonHandler:
                 self.on_recording_start()
         else:
             self.recording_state = RecordingState.IDLE
-            print(f"⏹️ Recording stopped (toggle #{self._toggle_count})")
             
             # Enhanced haptic for recording stop
             if self._enhanced_haptic_callback:
@@ -225,7 +208,6 @@ class ButtonHandler:
             enabled: Whether to enable fallback behavior
         """
         self._fallback_enabled = enabled
-        print(f"🔧 Firmware bug fallback {'enabled' if enabled else 'disabled'}")
     
     
     def reset(self) -> None:

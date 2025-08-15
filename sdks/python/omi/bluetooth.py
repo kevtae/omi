@@ -79,14 +79,9 @@ async def listen_to_omi_with_button(
                             break
                     
                     if speaker_char:
-                        print(f"🔊 Playing haptic feedback (level {level})")
                         await client.write_gatt_char(speaker_char, bytes([level & 0xFF]))
-                    else:
-                        print("⚠️  Speaker characteristic not found for haptic")
-                else:
-                    print("⚠️  Speaker service not found for haptic")
             except Exception as e:
-                print(f"❌ Haptic feedback error: {e}")
+                pass
         
         # Enhanced haptic feedback function with start/stop patterns
         async def play_enhanced_haptic(pattern_type: str) -> None:
@@ -121,21 +116,14 @@ async def listen_to_omi_with_button(
                             await client.write_gatt_char(speaker_char, bytes([1]))  # 20ms pulse
                             await asyncio.sleep(0.1)
                             await client.write_gatt_char(speaker_char, bytes([2]))  # 50ms pulse
-                            print("🔊 Recording START haptic: double pulse")
                         elif pattern_type == "stop":
                             # Recording STOP: Single long pulse (definitive, "done!")
                             await client.write_gatt_char(speaker_char, bytes([3]))  # 500ms pulse
-                            print("🔊 Recording STOP haptic: long pulse")
                         else:
                             # Unknown pattern, use basic haptic
                             await client.write_gatt_char(speaker_char, bytes([1]))  # 20ms pulse
-                            print(f"🔊 Basic haptic for unknown pattern: {pattern_type}")
-                    else:
-                        print("⚠️  Speaker characteristic not found for enhanced haptic")
-                else:
-                    print("⚠️  Speaker service not found for enhanced haptic")
             except Exception as e:
-                print(f"❌ Enhanced haptic feedback error: {e}")
+                pass
 
         # Start button notifications if handler provided
         if button_handler:
@@ -146,9 +134,7 @@ async def listen_to_omi_with_button(
             # Check if button service is available
             services = client.services
             service_list = list(services)
-            print(f"Found {len(service_list)} services on device:")
-            for service in service_list:
-                print(f"  Service: {service.uuid}")
+            # Service discovery for button functionality
                 
             button_service = None
             for service in service_list:
@@ -157,48 +143,19 @@ async def listen_to_omi_with_button(
                     break
             
             if button_service:
-                print(f"✅ Found button service: {button_service.uuid}")
                 # Find button characteristic
                 button_char = None
-                print(f"Button service has {len(button_service.characteristics)} characteristics:")
                 for char in button_service.characteristics:
-                    print(f"  Characteristic: {char.uuid} (properties: {char.properties})")
                     if char.uuid.lower() == BUTTON_TRIGGER_CHARACTERISTIC_UUID.lower():
                         button_char = char
                         break
                 
                 if button_char:
-                    print(f"✅ Found button characteristic: {button_char.uuid}")
-                    print(f"   Properties: {button_char.properties}")
-                    
-                    # Create button data handler with debugging
-                    import time
-                    last_notification_time = None
                     
                     def handle_button_data(sender: Any, data: bytes) -> None:
-                        nonlocal last_notification_time
-                        current_time = time.time()
-                        
-                        if last_notification_time is not None:
-                            time_diff = current_time - last_notification_time
-                            print(f"🔘 Raw button data received: {data.hex()} (length: {len(data)}) [+{time_diff:.2f}s since last]")
-                        else:
-                            print(f"🔘 Raw button data received: {data.hex()} (length: {len(data)}) [first notification]")
-                        
-                        last_notification_time = current_time
                         button_handler.process_button_data(data)
                     
                     await client.start_notify(BUTTON_TRIGGER_CHARACTERISTIC_UUID, handle_button_data)
-                    print("✅ Listening for button events...")
-                else:
-                    print("❌ Button characteristic not found on device")
-                    print(f"   Expected UUID: {BUTTON_TRIGGER_CHARACTERISTIC_UUID}")
-            else:
-                print("❌ Button service not found on device")
-                print(f"   Expected UUID: {BUTTON_SERVICE_UUID}")
-                print("   Available services:")
-                for service in services:
-                    print(f"     {service.uuid}")
         
         # Keep connection alive
         await asyncio.sleep(99999)

@@ -117,23 +117,25 @@ The example will:
 
 ## 🔘 Button Control
 
-The Omi SDK supports button press detection for controlling recording and other functions:
+The Omi SDK supports button press detection with **enhanced haptic feedback** for controlling recording:
 
-### Button States
-The Omi device button supports the following states:
+### Button States & Haptic Feedback
+The Omi device button supports the following states with distinct haptic patterns:
 - **State 3**: Long press started (button held down)
 - **State 5**: Long press released
-- Toggle recording: First long press starts, second stops
+- **Recording Start**: Double pulse haptic (quick ✨✨ vibration)
+- **Recording Stop**: Long pulse haptic (sustained ━━━ vibration)
+- Toggle behavior: First long press starts, second stops
 
 ### Button Recording Example
 ```python
 from omi import ButtonHandler, listen_to_omi_with_button
-from omi.feedback import RecordingFeedback
 
 # Create button handler with recording callbacks
 button_handler = ButtonHandler(
     on_recording_start=lambda: print("Recording started"),
     on_recording_stop=lambda: print("Recording stopped")
+    # Enhanced haptic patterns are automatic - no setup needed!
 )
 
 # Connect with button support
@@ -145,13 +147,13 @@ await listen_to_omi_with_button(
 )
 ```
 
-### Audio Feedback (Optional)
-```bash
-# Install text-to-speech support
-pip install "omi-sdk[feedback]"
-```
+### Enhanced Features
+- **Automatic haptic feedback**: Distinct vibration patterns for start/stop
+- **Firmware bug workaround**: Handles timing issues in current firmware
+- **Clean user experience**: Minimal console output, focused on transcripts
+- **Reliable detection**: Works even when firmware misses button events
 
-See `examples/button_recording.py` for a complete example with audio feedback.
+See `examples/button_recording.py` for a complete example.
 
 ## 📚 API Reference
 
@@ -167,9 +169,6 @@ See `examples/button_recording.py` for a complete example with audio feedback.
 - `omi.ButtonState` - Enum of button states
 - `omi.RecordingState` - Enum of recording states
 
-### Feedback Classes
-- `omi.AudioFeedback` - Text-to-speech feedback system
-- `omi.RecordingFeedback` - Recording-specific audio feedback
 
 ### Command Line Tools
 - `omi-scan` - Scan for nearby Bluetooth devices

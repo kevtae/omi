@@ -24,7 +24,6 @@ from omi.bluetooth import listen_to_omi_with_button
 from omi.button import ButtonHandler, ButtonState
 from omi.decoder import OmiOpusDecoder
 from omi.transcribe import transcribe
-from omi.feedback import RecordingFeedback
 
 
 # Configuration - Replace with your device's MAC address
@@ -49,9 +48,6 @@ class RecordingSession:
         self.recording_start_time: Optional[datetime] = None
         self.audio_bytes_received = 0
         
-        # Initialize feedback system
-        self.recording_feedback = RecordingFeedback()
-        
         # Initialize button handler with callbacks
         self.button_handler = ButtonHandler(
             on_recording_start=self._on_recording_start,
@@ -64,16 +60,10 @@ class RecordingSession:
         self.is_recording = True
         self.recording_start_time = datetime.now()
         self.audio_bytes_received = 0
-        self.recording_feedback.on_recording_start()
-        print(f"📍 Recording session started at {self.recording_start_time.strftime('%H:%M:%S')}")
     
     def _on_recording_stop(self) -> None:
         """Handle recording stop event."""
         self.is_recording = False
-        if self.recording_start_time:
-            duration = (datetime.now() - self.recording_start_time).total_seconds()
-            print(f"📊 Recording session ended - Duration: {duration:.1f}s, Bytes: {self.audio_bytes_received}")
-        self.recording_feedback.on_recording_stop()
         self.recording_start_time = None
     
     def _on_button_event(self, state: ButtonState) -> None:
@@ -83,12 +73,7 @@ class RecordingSession:
         Args:
             state: The button state that was detected
         """
-        state_names = {
-            ButtonState.IDLE: "IDLE",
-            ButtonState.LONG_PRESS_START: "LONG_PRESS_START",
-            ButtonState.LONG_PRESS_RELEASE: "LONG_PRESS_RELEASE"
-        }
-        print(f"🔘 Button event: {state_names.get(state, f'UNKNOWN({state})')}")
+        # Button events are handled automatically by ButtonHandler
     
     def handle_audio_data(self, sender: Any, data: bytes) -> None:
         """
@@ -103,10 +88,7 @@ class RecordingSession:
             decoded_pcm = self.decoder.decode_packet(data)
             if decoded_pcm:
                 self.audio_bytes_received += len(decoded_pcm)
-                try:
-                    self.audio_queue.put_nowait(decoded_pcm)
-                except Exception as e:
-                    print(f"Queue error: {e}")
+                self.audio_queue.put_nowait(decoded_pcm)
     
     async def custom_transcript_handler(self, transcript: str) -> None:
         """
@@ -116,23 +98,12 @@ class RecordingSession:
             transcript: The transcribed text
         """
         if self.is_recording:
-            print(f"🎤 [RECORDING] {transcript}")
-        else:
-            # This shouldn't happen but handle it gracefully
-            print(f"📝 [IDLE] {transcript}")
+            print(f"🎤 {transcript}")
     
     async def run(self) -> None:
         """Run the recording session."""
-        print("=" * 60)
-        print("🎮 Omi Button Recording Example")
-        print("=" * 60)
-        print("Instructions:")
-        print("  • Long press button to START recording")
-        print("  • Long press again to STOP recording")
-        print("  • Audio feedback will confirm state changes")
-        print("=" * 60)
-        print(f"Connecting to device: {OMI_MAC}")
-        print()
+        print("🎮 Omi Button Recording")
+        print("Long press button to start/stop recording")
         
         # Start both Bluetooth connection and transcription service
         await asyncio.gather(
