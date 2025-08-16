@@ -41,11 +41,6 @@ class ButtonHandler:
     This class processes button notifications and manages a toggle-based
     recording system where long presses start and stop recording.
     
-    FIRMWARE BUG WORKAROUND: TODO: REMOVE AFTER FIRMWARE UPDATE
-    Due to a timing bug in firmware where `current_time = 0` resets the global timer,
-    START events are often missed after the first button press. This handler implements
-    a fallback strategy to handle both START and RELEASE events intelligently.
-    
     Button Press Guidelines:
     - Hold button for AT LEAST 1 second (firmware requirement)
     - Recommended: Hold for 1.5-2 seconds for reliability
@@ -78,10 +73,6 @@ class ButtonHandler:
         self._enhanced_haptic_callback = None  # For enhanced start/stop patterns
         self._toggle_count = 0
         
-        # TODO: REMOVE AFTER FIRMWARE UPDATE - Firmware bug workaround tracking
-        self._last_start_time = None
-        self._last_release_time = None
-        self._fallback_enabled = True
     
     def process_button_data(self, data: bytes) -> Optional[ButtonState]:
         """
@@ -105,16 +96,12 @@ class ButtonHandler:
         except ValueError:
             return None
         
-        # Check for rapid duplicate notifications within a short time window
-        # Only filter true duplicates (same state within 100ms), not legitimate repeated presses
+        # DUPLICATE FILTERING DISABLED - Was causing legitimate button presses to be filtered out
+        # The firmware fix ensures reliable button events, so aggressive filtering is no longer needed
         import time
         current_time = time.time()
         
-        if hasattr(self, '_last_button_state') and hasattr(self, '_last_button_time'):
-            time_diff = current_time - self._last_button_time
-            if self._last_button_state == button_state and time_diff < 0.1:  # 100ms window
-                return button_state
-        
+        # Keep tracking variables for potential future use but don't filter
         self._last_button_state = button_state
         self._last_button_time = current_time
         
@@ -124,46 +111,14 @@ class ButtonHandler:
         
         # TODO: REMOVE AFTER FIRMWARE UPDATE - FIRMWARE BUG WORKAROUND: Handle both START and RELEASE events intelligently
         if button_state == ButtonState.LONG_PRESS_START:
-            self._last_start_time = current_time  # TODO: REMOVE AFTER FIRMWARE UPDATE
+            # self._last_start_time = current_time  # TODO: REMOVE AFTER FIRMWARE UPDATE
             self._toggle_recording()
             
         elif button_state == ButtonState.LONG_PRESS_RELEASE:
-            self._last_release_time = current_time  # TODO: REMOVE AFTER FIRMWARE UPDATE
-            
-            # TODO: REMOVE AFTER FIRMWARE UPDATE - FALLBACK LOGIC: If we got RELEASE without recent START, START was likely missed
-            if self._fallback_enabled and self._should_trigger_fallback_toggle():
-                # Provide additional haptic for fallback indication
-                if self.haptic_callback:
-                    haptic_level = 2  # 50ms vibration - additional feedback to indicate fallback was used
-                    self.haptic_callback(haptic_level)
-                self._toggle_recording()
+            pass  # Release events are ignored with fallback disabled
         
         return button_state
     
-    def _should_trigger_fallback_toggle(self) -> bool:
-        """
-        TODO: REMOVE ENTIRE METHOD AFTER FIRMWARE UPDATE
-        
-        Determine if we should trigger a fallback toggle on RELEASE.
-        
-        This happens when we receive a RELEASE without a recent START,
-        indicating the START event was missed due to the firmware timing bug.
-        
-        Returns:
-            True if fallback toggle should be triggered
-        """
-        # If we never received a START event, this is definitely a fallback case
-        if self._last_start_time is None:
-            return True
-            
-        # If we have both START and RELEASE times, check timing
-        if self._last_release_time is not None and self._last_start_time is not None:
-            # If RELEASE is more than 3 seconds after last START, likely a missed START
-            time_since_last_start = self._last_release_time - self._last_start_time
-            if time_since_last_start > 3.0:
-                return True
-        
-        return False
 
     def _toggle_recording(self) -> None:
         """Toggle the recording state and trigger appropriate callbacks."""
@@ -195,28 +150,12 @@ class ButtonHandler:
         """Check if currently recording."""
         return self.recording_state == RecordingState.RECORDING
     
-    def set_fallback_enabled(self, enabled: bool) -> None:
-        """
-        TODO: REMOVE ENTIRE METHOD AFTER FIRMWARE UPDATE
-        
-        Enable/disable firmware bug fallback behavior.
-        
-        When enabled, RELEASE events can trigger toggles if START was missed.
-        Disable this if you want strict START-only behavior.
-        
-        Args:
-            enabled: Whether to enable fallback behavior
-        """
-        self._fallback_enabled = enabled
     
     
     def reset(self) -> None:
         """Reset the handler to initial state."""
         self.recording_state = RecordingState.IDLE
         self._toggle_count = 0
-        # TODO: REMOVE AFTER FIRMWARE UPDATE - firmware bug workaround state
-        self._last_start_time = None
-        self._last_release_time = None
 
 
 def parse_button_state(data: List[int]) -> Optional[ButtonState]:

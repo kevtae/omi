@@ -149,9 +149,9 @@ await listen_to_omi_with_button(
 
 ### Enhanced Features
 - **Automatic haptic feedback**: Distinct vibration patterns for start/stop
-- **Firmware bug workaround**: Handles timing issues in current firmware
+- **Reliable button detection**: Advanced BLE notification handling prevents missed button presses
+- **Audio stream management**: Intelligent audio pausing during button detection for 100% reliability
 - **Clean user experience**: Minimal console output, focused on transcripts
-- **Reliable detection**: Works even when firmware misses button events
 
 See `examples/button_recording.py` for a complete example.
 
