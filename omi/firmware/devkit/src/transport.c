@@ -594,16 +594,18 @@ static bool push_to_gatt(struct bt_conn *conn)
 
         // Flow control: wait for a slot to be available (max 3 packets in flight)
         // This leaves room in BLE buffer for button/battery notifications
-        if (k_sem_take(&audio_tx_sem, K_MSEC(100)) != 0) {
-            LOG_WRN("Audio TX semaphore timeout, continuing anyway");
+        bool sem_acquired = (k_sem_take(&audio_tx_sem, K_MSEC(100)) == 0);
+        if (!sem_acquired) {
+            LOG_WRN("Audio TX semaphore timeout, sending without flow control");
         }
 
         // Prepare notification with completion callback
+        // Only set callback if semaphore was acquired, to avoid semaphore overflow
         struct bt_gatt_notify_params notify_params = {
             .attr = &audio_service.attrs[1],
             .data = pusher_temp_data,
             .len = packet_size + NET_BUFFER_HEADER_SIZE,
-            .func = audio_notify_sent_cb,
+            .func = sem_acquired ? audio_notify_sent_cb : NULL,
             .user_data = NULL,
         };
 
