@@ -551,6 +551,21 @@ static struct k_thread pusher_thread;
 static uint16_t packet_next_index = 0;
 static uint8_t pusher_temp_data[CODEC_OUTPUT_MAX_BYTES + NET_BUFFER_HEADER_SIZE];
 
+//
+// Audio TX Flow Control
+// Use counting semaphore to limit packets in flight, leaving room for button/battery notifications
+// Buffer has 10 slots (CONFIG_BT_L2CAP_TX_BUF_COUNT), we allow 3 audio packets max
+//
+#define AUDIO_TX_MAX_PENDING 3
+static K_SEM_DEFINE(audio_tx_sem, AUDIO_TX_MAX_PENDING, AUDIO_TX_MAX_PENDING);
+
+static void audio_notify_sent_cb(struct bt_conn *conn, void *user_data)
+{
+    ARG_UNUSED(conn);
+    ARG_UNUSED(user_data);
+    k_sem_give(&audio_tx_sem);
+}
+
 static bool push_to_gatt(struct bt_conn *conn)
 {
     // Read data from ring buffer
@@ -577,33 +592,47 @@ static bool push_to_gatt(struct bt_conn *conn)
         offset += packet_size;
         index++;
 
+        // Flow control: wait for a slot to be available (max 3 packets in flight)
+        // This leaves room in BLE buffer for button/battery notifications
+        if (k_sem_take(&audio_tx_sem, K_MSEC(100)) != 0) {
+            LOG_WRN("Audio TX semaphore timeout, continuing anyway");
+        }
+
+        // Prepare notification with completion callback
+        struct bt_gatt_notify_params notify_params = {
+            .attr = &audio_service.attrs[1],
+            .data = pusher_temp_data,
+            .len = packet_size + NET_BUFFER_HEADER_SIZE,
+            .func = audio_notify_sent_cb,
+            .user_data = NULL,
+        };
+
         retry_count = 0;
         while (retry_count < max_retries) {
-            // Try send notification
-            int err =
-                bt_gatt_notify(conn, &audio_service.attrs[1], pusher_temp_data, packet_size + NET_BUFFER_HEADER_SIZE);
+            int err = bt_gatt_notify_cb(conn, &notify_params);
 
-            // Log failure
-            if (err) {
-                LOG_DBG("bt_gatt_notify failed (err %d)", err);
-                LOG_DBG("MTU: %d, packet_size: %d", current_mtu, packet_size + NET_BUFFER_HEADER_SIZE);
-                k_sleep(K_MSEC(1));
+            if (err == 0) {
+                // Success - callback will release semaphore when transmitted
+                break;
+            }
+
+            // On failure, release semaphore and retry
+            if (err == -ENOMEM) {
+                // Buffer full despite flow control, wait and retry
+                LOG_DBG("bt_gatt_notify_cb ENOMEM, retrying");
+                k_sleep(K_MSEC(5));
                 retry_count++;
                 continue;
             }
 
-            // Try to send more data if possible
-            if (err == -EAGAIN || err == -ENOMEM) {
-                retry_count++;
-                continue;
-            }
-
-            // Break if success
-            break;
+            LOG_DBG("bt_gatt_notify_cb failed (err %d)", err);
+            k_sem_give(&audio_tx_sem);  // Release semaphore on failure
+            retry_count++;
         }
 
         if (retry_count >= max_retries) {
             LOG_ERR("Failed to send packet after %d retries", max_retries);
+            k_sem_give(&audio_tx_sem);  // Ensure semaphore is released
             return false;
         }
     }
