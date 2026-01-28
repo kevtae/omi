@@ -628,15 +628,21 @@ static bool push_to_gatt(struct bt_conn *conn)
                 continue;
             }
 
+            // Other errors - release semaphore and exit retry loop
             LOG_DBG("bt_gatt_notify_cb failed (err %d)", err);
-            k_sem_give(&audio_tx_sem);  // Release semaphore on failure
-            retry_count++;
+            if (sem_acquired) {
+                k_sem_give(&audio_tx_sem);
+            }
+            retry_count = max_retries;  // Force exit from retry loop
+            break;
         }
 
         if (retry_count >= max_retries) {
             audio_tx_dropped_count++;
             LOG_ERR("Audio TX: packet dropped after %d retries (total dropped: %u)", max_retries, audio_tx_dropped_count);
-            k_sem_give(&audio_tx_sem);  // Ensure semaphore is released
+            if (sem_acquired) {
+                k_sem_give(&audio_tx_sem);  // Ensure semaphore is released
+            }
             return false;
         }
     }
