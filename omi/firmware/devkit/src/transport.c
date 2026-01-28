@@ -554,10 +554,11 @@ static uint8_t pusher_temp_data[CODEC_OUTPUT_MAX_BYTES + NET_BUFFER_HEADER_SIZE]
 //
 // Audio TX Flow Control
 // Use counting semaphore to limit packets in flight, leaving room for button/battery notifications
-// Buffer has 10 slots (CONFIG_BT_L2CAP_TX_BUF_COUNT), we allow 3 audio packets max
+// Buffer has 10 slots (CONFIG_BT_L2CAP_TX_BUF_COUNT), we allow 6 audio packets max
 //
-#define AUDIO_TX_MAX_PENDING 3
+#define AUDIO_TX_MAX_PENDING 6
 static K_SEM_DEFINE(audio_tx_sem, AUDIO_TX_MAX_PENDING, AUDIO_TX_MAX_PENDING);
+static uint32_t audio_tx_dropped_count = 0;
 
 static void audio_notify_sent_cb(struct bt_conn *conn, void *user_data)
 {
@@ -592,7 +593,7 @@ static bool push_to_gatt(struct bt_conn *conn)
         offset += packet_size;
         index++;
 
-        // Flow control: wait for a slot to be available (max 3 packets in flight)
+        // Flow control: wait for a slot to be available (max 6 packets in flight)
         // This leaves room in BLE buffer for button/battery notifications
         bool sem_acquired = (k_sem_take(&audio_tx_sem, K_MSEC(100)) == 0);
         if (!sem_acquired) {
@@ -633,7 +634,8 @@ static bool push_to_gatt(struct bt_conn *conn)
         }
 
         if (retry_count >= max_retries) {
-            LOG_ERR("Failed to send packet after %d retries", max_retries);
+            audio_tx_dropped_count++;
+            LOG_ERR("Audio TX: packet dropped after %d retries (total dropped: %u)", max_retries, audio_tx_dropped_count);
             k_sem_give(&audio_tx_sem);  // Ensure semaphore is released
             return false;
         }
